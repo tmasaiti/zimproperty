@@ -122,11 +122,16 @@ const AuthPage: React.FC = () => {
   };
 
   const onRegisterSubmit = (data: RegisterFormValues) => {
-    const { terms, confirmPassword, ...formData } = data;
+    const { terms, ...formData } = data;
+    // Keep confirmPassword in the payload as the server expects it for validation
     registerMutation.mutate(formData, {
       onSuccess: (user) => {
         // Redirect to the appropriate dashboard based on user role
         setLocation(`/${user.role}`);
+      },
+      onError: (error) => {
+        // The toast notifications will be handled by the auth context
+        console.error("Registration error:", error);
       }
     });
   };

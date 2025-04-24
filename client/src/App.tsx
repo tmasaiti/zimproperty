@@ -9,6 +9,7 @@ import SellerPage from "@/pages/seller-page";
 import AgentPage from "@/pages/agent-page";
 import AdminPage from "@/pages/admin-page";
 import Subscribe from "@/pages/subscribe";
+import LeadDetailsPage from "@/pages/lead-details";
 import { AuthProvider } from "@/hooks/use-auth";
 import { ProtectedRoute } from "@/lib/protected-route";
 import Layout from "@/components/layout/header";
@@ -23,6 +24,7 @@ function Router() {
         <ProtectedRoute path="/agent" component={AgentPage} roles={["agent"]} />
         <ProtectedRoute path="/admin" component={AdminPage} roles={["admin"]} />
         <ProtectedRoute path="/subscribe" component={Subscribe} roles={["agent"]} />
+        <ProtectedRoute path="/lead/:id" component={LeadDetailsPage} roles={["agent"]} />
         <Route component={NotFound} />
       </Switch>
     </Layout>

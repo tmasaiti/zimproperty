@@ -1,18 +1,22 @@
 import React from 'react';
-import { Property } from '@shared/schema';
+import { Property, LeadPurchase } from '@shared/schema';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Home, Building, MapPin, Clock, Ruler, DollarSign, Loader2 } from 'lucide-react';
+import { Home, Building, MapPin, Clock, Ruler, DollarSign, Loader2, Info } from 'lucide-react';
 import { format, formatDistance } from 'date-fns';
+import { useLocation } from 'wouter';
 
 interface LeadCardProps {
   lead: Property;
   onPurchase: () => void;
   isPending: boolean;
+  isPurchased?: boolean;
+  leadPurchase?: LeadPurchase;
 }
 
-const LeadCard: React.FC<LeadCardProps> = ({ lead, onPurchase, isPending }) => {
+const LeadCard: React.FC<LeadCardProps> = ({ lead, onPurchase, isPending, isPurchased = false, leadPurchase }) => {
+  const [, setLocation] = useLocation();
   // Determine if the lead is "hot" (less than 24 hours old)
   const isHotLead = () => {
     const createdAt = new Date(lead.createdAt);
@@ -100,15 +104,26 @@ const LeadCard: React.FC<LeadCardProps> = ({ lead, onPurchase, isPending }) => {
               </div>
             </div>
           </div>
-          <div className="mt-4 md:mt-0 flex-shrink-0">
-            <Button 
-              className="bg-secondary-500 hover:bg-secondary-600"
-              onClick={onPurchase}
-              disabled={isPending}
-            >
-              {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Buy Lead (${getLeadPrice()})
-            </Button>
+          <div className="mt-4 md:mt-0 flex-shrink-0 space-y-2">
+            {isPurchased ? (
+              <Button 
+                variant="outline"
+                onClick={() => setLocation(`/lead/${lead.id}`)}
+                className="w-full"
+              >
+                <Info className="mr-2 h-4 w-4" />
+                Lead Details
+              </Button>
+            ) : (
+              <Button 
+                className="bg-secondary-500 hover:bg-secondary-600 w-full"
+                onClick={onPurchase}
+                disabled={isPending}
+              >
+                {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Buy Lead (${getLeadPrice()})
+              </Button>
+            )}
           </div>
         </div>
         
