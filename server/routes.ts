@@ -1,0 +1,474 @@
+import type { Express } from "express";
+import { createServer, type Server } from "http";
+import { storage } from "./storage";
+import { setupAuth } from "./auth";
+import { properties, leadPurchases, payments, notifications, subscriptions } from "@shared/schema";
+import { eq, and, desc, gte, lt, sql, inArray } from "drizzle-orm";
+import { z } from "zod";
+import { insertPropertySchema, insertLeadPurchaseSchema, insertPaymentSchema, insertSubscriptionSchema } from "@shared/schema";
+
+export async function registerRoutes(app: Express): Promise<Server> {
+  // Set up authentication routes
+  setupAuth(app);
+  
+  // Helper middleware to check authentication
+  const isAuthenticated = (req: any, res: any, next: any) => {
+    if (req.isAuthenticated()) {
+      return next();
+    }
+    res.status(401).json({ message: "Not authenticated" });
+  };
+  
+  // Helper middleware to check role
+  const hasRole = (roles: string[]) => (req: any, res: any, next: any) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Not authenticated" });
+    }
+    
+    if (!roles.includes(req.user.role)) {
+      return res.status(403).json({ message: "Unauthorized" });
+    }
+    
+    next();
+  };
+  
+  //=====================================
+  // Property/Lead Routes
+  //=====================================
+  
+  // Create new property listing
+  app.post("/api/properties", isAuthenticated, async (req, res) => {
+    try {
+      const data = insertPropertySchema.parse({
+        ...req.body,
+        sellerId: req.user.id,
+        status: "active"
+      });
+      
+      const property = await storage.createProperty(data);
+      
+      // Notify agents about new property
+      // In a real app, we would query agents by location preference
+      // For now, let's assume we have a fixed list of agent IDs
+      const agents = await storage.getActiveSubscriptions();
+      
+      for (const subscription of agents) {
+        await storage.createNotification({
+          userId: subscription.agentId,
+          title: "New Property Listing",
+          message: `A new ${property.type} property is available in ${property.location} for $${property.price}.`,
+          type: "new_property",
+          linkUrl: `/agent/property/${property.id}`
+        });
+      }
+      
+      res.status(201).json(property);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Validation error", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to create property listing" });
+    }
+  });
+  
+  // Get properties by seller
+  app.get("/api/properties/my-listings", isAuthenticated, async (req, res) => {
+    try {
+      const properties = await storage.getPropertiesBySeller(req.user.id);
+      res.json(properties);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch properties" });
+    }
+  });
+  
+  // Get filtered properties (for agents)
+  app.get("/api/properties", hasRole(["agent", "admin"]), async (req, res) => {
+    try {
+      const { type, location, minPrice, maxPrice, status } = req.query;
+      
+      const filters: any = {};
+      
+      if (type && typeof type === "string") filters.type = type;
+      if (location && typeof location === "string") filters.location = location;
+      if (minPrice && typeof minPrice === "string") filters.minPrice = parseFloat(minPrice);
+      if (maxPrice && typeof maxPrice === "string") filters.maxPrice = parseFloat(maxPrice);
+      if (status && typeof status === "string") filters.status = status;
+      
+      const properties = await storage.getPropertiesByFilters(filters);
+      res.json(properties);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch properties" });
+    }
+  });
+  
+  // Get single property by ID
+  app.get("/api/properties/:id", isAuthenticated, async (req, res) => {
+    try {
+      const propertyId = parseInt(req.params.id);
+      if (isNaN(propertyId)) {
+        return res.status(400).json({ message: "Invalid property ID" });
+      }
+      
+      const property = await storage.getProperty(propertyId);
+      if (!property) {
+        return res.status(404).json({ message: "Property not found" });
+      }
+      
+      // If user is not the seller or an admin, check if they've purchased this lead
+      if (property.sellerId !== req.user.id && req.user.role !== "admin") {
+        const leadPurchase = await storage.getLeadPurchase(propertyId);
+        if (!leadPurchase || leadPurchase.agentId !== req.user.id) {
+          // Mask sensitive seller data
+          property.seller = {
+            ...property.seller,
+            email: "********",
+            phone: "********"
+          };
+        }
+      }
+      
+      res.json(property);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch property" });
+    }
+  });
+  
+  //=====================================
+  // Lead Purchase Routes
+  //=====================================
+  
+  // Purchase a lead
+  app.post("/api/leads/purchase", hasRole(["agent"]), async (req, res) => {
+    try {
+      const { propertyId, price } = req.body;
+      
+      if (!propertyId || !price) {
+        return res.status(400).json({ message: "Property ID and price are required" });
+      }
+      
+      // Check if property exists
+      const property = await storage.getProperty(propertyId);
+      if (!property) {
+        return res.status(404).json({ message: "Property not found" });
+      }
+      
+      // Check if agent already purchased this lead
+      const existingPurchases = await storage.getLeadPurchasesByAgent(req.user.id);
+      const alreadyPurchased = existingPurchases.some(p => p.propertyId === propertyId);
+      
+      if (alreadyPurchased) {
+        return res.status(400).json({ message: "You have already purchased this lead" });
+      }
+      
+      // Check agent balance
+      const agentProfile = await storage.getAgentProfile(req.user.id);
+      if (!agentProfile) {
+        return res.status(404).json({ message: "Agent profile not found" });
+      }
+      
+      if (agentProfile.balance < price) {
+        return res.status(400).json({ message: "Insufficient balance" });
+      }
+      
+      // Process the purchase
+      const leadPurchase = await storage.purchaseLead({
+        agentId: req.user.id,
+        propertyId,
+        price,
+        purchaseDate: new Date(),
+        contacted: false,
+        status: "pending"
+      });
+      
+      // Update agent balance
+      await storage.updateAgentProfile(req.user.id, {
+        balance: agentProfile.balance - price
+      });
+      
+      // Create payment record
+      await storage.createPayment({
+        userId: req.user.id,
+        amount: price,
+        method: "ecocash", // Default method
+        status: "completed",
+        description: `Lead purchase for property #${propertyId}`,
+        leadPurchaseId: leadPurchase.id
+      });
+      
+      // Notify seller
+      await storage.createNotification({
+        userId: property.sellerId,
+        title: "Lead Purchased",
+        message: "An agent has purchased your property listing and will contact you soon.",
+        type: "lead_purchase",
+        linkUrl: `/seller/property/${propertyId}`
+      });
+      
+      res.status(201).json(leadPurchase);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to purchase lead" });
+    }
+  });
+  
+  // Get leads purchased by agent
+  app.get("/api/leads/purchased", hasRole(["agent"]), async (req, res) => {
+    try {
+      const purchases = await storage.getLeadPurchasesByAgent(req.user.id);
+      res.json(purchases);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch purchased leads" });
+    }
+  });
+  
+  // Update lead status (contacted, etc.)
+  app.patch("/api/leads/:id", hasRole(["agent"]), async (req, res) => {
+    try {
+      const leadId = parseInt(req.params.id);
+      if (isNaN(leadId)) {
+        return res.status(400).json({ message: "Invalid lead ID" });
+      }
+      
+      const { contacted, status, sellerRating, feedback } = req.body;
+      
+      // Validate that this lead belongs to the agent
+      const lead = await storage.getLeadPurchase(leadId);
+      if (!lead) {
+        return res.status(404).json({ message: "Lead not found" });
+      }
+      
+      if (lead.agentId !== req.user.id) {
+        return res.status(403).json({ message: "Unauthorized" });
+      }
+      
+      // Update the lead
+      const updatedLead = await storage.getLeadPurchase(leadId);
+      if (!updatedLead) {
+        return res.status(404).json({ message: "Lead not found" });
+      }
+      
+      res.json(updatedLead);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to update lead" });
+    }
+  });
+  
+  //=====================================
+  // Subscription Routes
+  //=====================================
+  
+  // Create or update subscription
+  app.post("/api/subscriptions", hasRole(["agent"]), async (req, res) => {
+    try {
+      const { type, price, months } = req.body;
+      
+      if (!type || !price || !months) {
+        return res.status(400).json({ message: "Type, price, and duration are required" });
+      }
+      
+      // Check if agent already has an active subscription
+      const existingSubscription = await storage.getAgentSubscription(req.user.id);
+      
+      // Calculate end date
+      const endDate = new Date();
+      endDate.setMonth(endDate.getMonth() + months);
+      
+      let subscription;
+      
+      if (existingSubscription) {
+        // Update existing subscription
+        subscription = await storage.updateSubscription(existingSubscription.id, {
+          type,
+          price,
+          endDate,
+          isActive: true
+        });
+      } else {
+        // Create new subscription
+        subscription = await storage.createSubscription({
+          agentId: req.user.id,
+          type,
+          price,
+          startDate: new Date(),
+          endDate,
+          isActive: true,
+          autoRenew: true
+        });
+      }
+      
+      res.status(201).json(subscription);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to process subscription" });
+    }
+  });
+  
+  // Get agent's active subscription
+  app.get("/api/subscriptions/current", hasRole(["agent"]), async (req, res) => {
+    try {
+      const subscription = await storage.getAgentSubscription(req.user.id);
+      if (!subscription) {
+        return res.status(404).json({ message: "No active subscription found" });
+      }
+      
+      res.json(subscription);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch subscription" });
+    }
+  });
+  
+  //=====================================
+  // Payment Routes
+  //=====================================
+  
+  // Process payment (top up agent balance)
+  app.post("/api/payments", isAuthenticated, async (req, res) => {
+    try {
+      const { amount, method, description } = req.body;
+      
+      if (!amount || !method) {
+        return res.status(400).json({ message: "Amount and payment method are required" });
+      }
+      
+      // Create the payment record
+      const payment = await storage.createPayment({
+        userId: req.user.id,
+        amount,
+        method,
+        status: "completed", // In a real app, this would be "pending" until confirmed
+        description: description || "Account top-up",
+      });
+      
+      // If the payment is for an agent, update their balance
+      if (req.user.role === "agent") {
+        const agentProfile = await storage.getAgentProfile(req.user.id);
+        if (agentProfile) {
+          await storage.updateAgentProfile(req.user.id, {
+            balance: agentProfile.balance + amount
+          });
+        }
+      }
+      
+      res.status(201).json(payment);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to process payment" });
+    }
+  });
+  
+  // Get user's payment history
+  app.get("/api/payments/history", isAuthenticated, async (req, res) => {
+    try {
+      const payments = await storage.getPaymentsByUser(req.user.id);
+      res.json(payments);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch payment history" });
+    }
+  });
+  
+  //=====================================
+  // Notification Routes
+  //=====================================
+  
+  // Get user's notifications
+  app.get("/api/notifications", isAuthenticated, async (req, res) => {
+    try {
+      const notifications = await storage.getNotificationsByUser(req.user.id);
+      res.json(notifications);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch notifications" });
+    }
+  });
+  
+  // Mark notification as read
+  app.patch("/api/notifications/:id", isAuthenticated, async (req, res) => {
+    try {
+      const notificationId = parseInt(req.params.id);
+      if (isNaN(notificationId)) {
+        return res.status(400).json({ message: "Invalid notification ID" });
+      }
+      
+      const notification = await storage.markNotificationAsRead(notificationId);
+      if (!notification) {
+        return res.status(404).json({ message: "Notification not found" });
+      }
+      
+      res.json(notification);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to update notification" });
+    }
+  });
+  
+  //=====================================
+  // Admin Routes
+  //=====================================
+  
+  // Get pending agent verifications
+  app.get("/api/admin/agent-verifications", hasRole(["admin"]), async (req, res) => {
+    try {
+      const pendingAgents = await storage.getPendingAgentProfiles();
+      res.json(pendingAgents);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch pending verifications" });
+    }
+  });
+  
+  // Approve or reject agent verification
+  app.patch("/api/admin/agent-verifications/:id", hasRole(["admin"]), async (req, res) => {
+    try {
+      const agentId = parseInt(req.params.id);
+      if (isNaN(agentId)) {
+        return res.status(400).json({ message: "Invalid agent ID" });
+      }
+      
+      const { status, note } = req.body;
+      
+      if (!status || !["approved", "rejected"].includes(status)) {
+        return res.status(400).json({ message: "Valid status (approved or rejected) is required" });
+      }
+      
+      // Get the agent profile
+      const agentProfile = await storage.getAgentProfile(agentId);
+      if (!agentProfile) {
+        return res.status(404).json({ message: "Agent profile not found" });
+      }
+      
+      // Update the verification status
+      const updatedProfile = await storage.updateAgentProfile(agentId, {
+        verificationStatus: status,
+        verificationDate: new Date(),
+        verificationNote: note || ""
+      });
+      
+      // Notify the agent
+      const notificationTitle = status === "approved" 
+        ? "Account Verification Approved" 
+        : "Account Verification Rejected";
+      
+      const notificationMessage = status === "approved"
+        ? "Your agent account has been verified. You can now purchase leads."
+        : `Your agent account verification was rejected. Reason: ${note || "No reason provided"}`;
+      
+      await storage.createNotification({
+        userId: agentId,
+        title: notificationTitle,
+        message: notificationMessage,
+        type: "verification_update"
+      });
+      
+      res.json(updatedProfile);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to update verification status" });
+    }
+  });
+  
+  // Get system statistics
+  app.get("/api/admin/stats", hasRole(["admin"]), async (req, res) => {
+    try {
+      const stats = await storage.getSystemStats();
+      res.json(stats);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch system statistics" });
+    }
+  });
+  
+  const httpServer = createServer(app);
+  return httpServer;
+}
