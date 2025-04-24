@@ -116,9 +116,7 @@ const AuthPage: React.FC = () => {
     loginMutation.mutate(data, {
       onSuccess: (user) => {
         // Redirect to the appropriate dashboard based on user role
-        setTimeout(() => {
-          setLocation(`/${user.role}`);
-        }, 500);
+        setLocation(`/${user.role}`);
       }
     });
   };
@@ -128,9 +126,7 @@ const AuthPage: React.FC = () => {
     registerMutation.mutate(formData, {
       onSuccess: (user) => {
         // Redirect to the appropriate dashboard based on user role
-        setTimeout(() => {
-          setLocation(`/${user.role}`);
-        }, 500);
+        setLocation(`/${user.role}`);
       }
     });
   };
