@@ -46,11 +46,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         title: "Login successful",
         description: `Welcome back, ${user.firstName}!`,
       });
-      
-      // Redirect to the appropriate dashboard based on user role
-      setTimeout(() => {
-        window.location.href = `/${user.role}`;
-      }, 500);
     },
     onError: (error: Error) => {
       toast({
@@ -72,11 +67,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         title: "Registration successful",
         description: `Welcome to ZimProperty, ${user.firstName}!`,
       });
-      
-      // Redirect to the appropriate dashboard based on user role
-      setTimeout(() => {
-        window.location.href = `/${user.role}`;
-      }, 500);
     },
     onError: (error: Error) => {
       toast({
@@ -97,11 +87,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         title: "Logged out",
         description: "You have been successfully logged out",
       });
-      
-      // Redirect to home page
-      setTimeout(() => {
-        window.location.href = "/";
-      }, 500);
     },
     onError: (error: Error) => {
       toast({

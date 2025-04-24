@@ -1,4 +1,4 @@
-import { Route, Switch } from "wouter";
+import { Route, Switch, Redirect } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -8,19 +8,25 @@ import AuthPage from "@/pages/auth-page";
 import SellerPage from "@/pages/seller-page";
 import AgentPage from "@/pages/agent-page";
 import AdminPage from "@/pages/admin-page";
-import { AuthProvider } from "@/hooks/use-auth";
+import { AuthProvider, useAuth } from "@/hooks/use-auth";
 import { ProtectedRoute } from "@/lib/protected-route";
 import Layout from "@/components/layout/header";
 
 function Router() {
+  const { user } = useAuth();
+  
   return (
     <Layout>
       <Switch>
-        <Route path="/" component={HomePage} />
-        <Route path="/auth" component={AuthPage} />
-        <ProtectedRoute path="/seller" component={SellerPage} />
-        <ProtectedRoute path="/agent" component={AgentPage} />
-        <ProtectedRoute path="/admin" component={AdminPage} />
+        <Route path="/" exact>
+          {user ? <Redirect to={`/${user.role}`} /> : <HomePage />}
+        </Route>
+        <Route path="/auth">
+          {user ? <Redirect to={`/${user.role}`} /> : <AuthPage />}
+        </Route>
+        <ProtectedRoute path="/seller" component={SellerPage} roles={["seller"]} />
+        <ProtectedRoute path="/agent" component={AgentPage} roles={["agent"]} />
+        <ProtectedRoute path="/admin" component={AdminPage} roles={["admin"]} />
         <Route component={NotFound} />
       </Switch>
     </Layout>

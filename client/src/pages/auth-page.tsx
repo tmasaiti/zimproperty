@@ -113,12 +113,26 @@ const AuthPage: React.FC = () => {
   }, [user, setLocation]);
 
   const onLoginSubmit = (data: LoginFormValues) => {
-    loginMutation.mutate(data);
+    loginMutation.mutate(data, {
+      onSuccess: (user) => {
+        // Redirect to the appropriate dashboard based on user role
+        setTimeout(() => {
+          setLocation(`/${user.role}`);
+        }, 500);
+      }
+    });
   };
 
   const onRegisterSubmit = (data: RegisterFormValues) => {
     const { terms, confirmPassword, ...formData } = data;
-    registerMutation.mutate(formData);
+    registerMutation.mutate(formData, {
+      onSuccess: (user) => {
+        // Redirect to the appropriate dashboard based on user role
+        setTimeout(() => {
+          setLocation(`/${user.role}`);
+        }, 500);
+      }
+    });
   };
 
   const handleRoleChange = (value: string) => {
