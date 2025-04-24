@@ -1,0 +1,104 @@
+The portal is supposed to serve the following web based functions, 
+-	Registration for Sellers and Real Estates Agencies, System Admin
+-	Account management, Password Reset
+Overview of Account status, , balance overview
+
+1. Seller Journey
+1.1 Discovery & Onboarding
+✅ Lead Submission
+•	Form fields:
+o	Property details (type, location, price, size, photos).
+o	Contact info (phone, email, WhatsApp preference).
+•	Data validation:
+o	Auto-format phone numbers (+263).
+o	Image compression (max 5MB per photo).
+•	Success screen:
+o	"Thank you! Agents will contact you within 24 hours."
+o	Option to track lead status (email/SMS notifications).
+1.2 Lead Management
+✅ Agent Interest Notifications
+•	SMS/Email: "3 agents are interested in your property in Harare!"
+•	Dashboard (if logged in):
+o	View agent profiles (rating, past deals).
+o	Respond to inquiries (WhatsApp/call directly).
+✅ Lead Expiry & Follow-Up
+•	Automated reminder (Day 7):
+o	"Your lead is expiring soon—renew for extended visibility?"
+•	Archived after 30 days (option to resubmit).
+________________________________________
+2. Agent Journey
+2.1 Registration & Verification
+✅ Sign-Up
+•	Form: Name, email, phone, agency, license upload.
+•	ID Verification:
+o	Admin manually checks documents (24-hour SLA).
+o	SMS/email upon approval: "You’re now approved to browse leads!"
+✅ Subscription/Payment Setup
+•	Choose plan:
+o	Pay-per-lead (10–10–20 per lead).
+o	Unlimited subscription (100–100–200/month).
+•	Payment methods: Ecocash, bank transfer, USD cash (Zim-specific).
+2.2 Lead Acquisition
+✅ Browsing Leads
+•	Filters: Location (Harare, Bulawayo), price range, property type.
+•	Lead prioritization:
+o	"Hot leads" (submitted <24hr ago).
+o	"Verified sellers" (ID-confirmed, higher cost).
+✅ Purchasing a Lead
+•	Click "Buy Lead" → Confirm payment.
+•	Instant access: Seller contact details unlocked.
+•	CRM integration: Log calls/emails within the platform.
+✅ Contacting the Seller
+•	Direct WhatsApp/call via masked number (privacy protection).
+•	Feedback loop:
+o	Mark lead as "Contacted", "Closed", or "Fake".
+o	Rate seller responsiveness (1–5 stars).
+2.3 Subscription & Billing
+✅ Recurring Payments
+•	Auto-charged monthly (failed payment → grace period).
+•	Usage alerts:
+o	"You’ve used 80% of your lead credits this month."
+✅ Cancellation & Refunds
+•	Prorated refunds for unused leads (if applicable).
+•	Exit survey: "Why are you leaving?"
+________________________________________
+3. System Admin Journey
+3.1 User & Lead Moderation
+✅ Agent Approval
+•	Dashboard: Queue of pending verifications.
+•	Rejections require reason ("Blurry ID photo").
+✅ Lead Quality Control
+•	Automated flags:
+o	Duplicate submissions.
+o	Suspicious pricing (outlier detection).
+•	Manual review: Delete spam (e.g., fake luxury listings).
+3.2 Financial Management
+✅ Payout Reconciliation
+•	Track agent earnings (lead purchases, subscriptions).
+•	Payout cycles: Biweekly Ecocassh/bank transfers.
+✅ Revenue Analytics
+•	Dashboard:
+o	MRR (subscriptions vs. one-time sales).
+o	Top-performing agents (most leads closed).
+3.3 System Maintenance
+✅ SLA Monitoring
+•	Uptime checks (99.9% target).
+•	Alert triggers:
+o	Payment gateway failures.
+o	Spam attack detection (100+ leads/min).
+✅ Compliance & Backups
+•	Daily encrypted backups (AWS S3/Local).
+•	GDPR-like data deletion requests (seller opt-out).
+________________________________________
+4. Edge Cases & Error Handling
+Scenario	Resolution
+Seller submits duplicate lead	Auto-merge with previous submission.
+Agent payment fails	Retry logic + SMS notification.
+Admin accidentally deletes lead	7-day soft delete recovery.
+Agent disputes lead quality	Refund or credit if verified fake.
+________________________________________
+5. Key Performance Indicators (KPIs)
+•	Seller Satisfaction: >80% response rate to agents.
+•	Agent Retention: <10% churn/month.
+•	Revenue Growth: 20% MoM increase in lead sales.
+
