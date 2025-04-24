@@ -16,7 +16,7 @@ export const leadStatusEnum = pgEnum('lead_status', ['pending', 'active', 'expir
 export const verificationStatusEnum = pgEnum('verification_status', ['pending', 'approved', 'rejected']);
 
 // Enum for payment methods
-export const paymentMethodEnum = pgEnum('payment_method', ['ecocash', 'bank_transfer', 'cash']);
+export const paymentMethodEnum = pgEnum('payment_method', ['ecocash', 'bank_transfer', 'cash', 'stripe']);
 
 // Enum for subscription types
 export const subscriptionTypeEnum = pgEnum('subscription_type', ['pay_per_lead', 'unlimited']);

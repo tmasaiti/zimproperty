@@ -401,7 +401,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             // Create or update subscription
             if (existingSubscription) {
               await storage.updateSubscription(existingSubscription.id, {
-                type: planType,
+                type: planType as any,
                 price: paymentIntent.amount / 100, // Convert from cents
                 endDate,
                 isActive: true
@@ -409,7 +409,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             } else {
               await storage.createSubscription({
                 agentId: parseInt(userId),
-                type: planType,
+                type: planType as any,
                 price: paymentIntent.amount / 100, // Convert from cents
                 startDate: new Date(),
                 endDate,
@@ -422,7 +422,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             await storage.createPayment({
               userId: parseInt(userId),
               amount: paymentIntent.amount / 100,
-              method: "stripe",
+              method: "stripe" as any,
               status: "completed",
               description: description || `Subscription payment: ${planType}`,
             });

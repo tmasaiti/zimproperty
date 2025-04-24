@@ -288,7 +288,7 @@ const SubscriptionPlans: React.FC<SubscriptionPlansProps> = ({ currentSubscripti
           <CardDescription>Flexible payment options for Zimbabwean agents</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             <div className="border border-gray-200 rounded-lg p-4 text-center">
               <div className="h-12 w-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
                 <svg viewBox="0 0 24 24" fill="none" className="h-6 w-6 text-gray-700">
@@ -318,6 +318,17 @@ const SubscriptionPlans: React.FC<SubscriptionPlansProps> = ({ currentSubscripti
               </div>
               <h3 className="text-lg font-medium text-gray-900 mb-2">USD Cash</h3>
               <p className="text-gray-600">In-person payments at our office</p>
+            </div>
+            <div className="border border-primary-200 bg-primary-50 rounded-lg p-4 text-center">
+              <div className="h-12 w-12 bg-primary-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg viewBox="0 0 24 24" className="h-6 w-6 text-primary-600" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect>
+                  <line x1="1" y1="10" x2="23" y2="10"></line>
+                </svg>
+              </div>
+              <h3 className="text-lg font-medium text-primary-900 mb-2">Credit/Debit Card</h3>
+              <p className="text-primary-700">Secure online payments with Stripe</p>
+              <Badge className="mt-2 bg-primary-100 text-primary-800">Recommended</Badge>
             </div>
           </div>
         </CardContent>
