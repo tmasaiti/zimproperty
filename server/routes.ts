@@ -123,21 +123,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Property not found" });
       }
       
+      // Get seller information
+      const seller = await storage.getUser(property.sellerId);
+      if (!seller) {
+        return res.status(404).json({ message: "Seller not found" });
+      }
+      
+      // Create response object
+      const propertyWithSeller = {
+        ...property,
+        seller: {
+          id: seller.id,
+          firstName: seller.firstName,
+          lastName: seller.lastName,
+          email: seller.email,
+          phone: seller.phone,
+          whatsappPreferred: seller.whatsappPreferred
+        }
+      };
+      
       // If user is not the seller or an admin, check if they've purchased this lead
       if (property.sellerId !== req.user.id && req.user.role !== "admin") {
-        const leadPurchase = await storage.getLeadPurchase(propertyId);
-        if (!leadPurchase || leadPurchase.agentId !== req.user.id) {
-          // Mask sensitive seller data
-          property.seller = {
-            ...property.seller,
+        // Check if this agent has purchased the lead
+        const leadPurchase = await storage.getLeadPurchaseByAgentAndProperty(req.user.id, propertyId);
+        
+        if (!leadPurchase) {
+          // Mask sensitive seller data for users who haven't purchased the lead
+          propertyWithSeller.seller = {
+            ...propertyWithSeller.seller,
             email: "********",
             phone: "********"
           };
         }
       }
       
-      res.json(property);
+      res.json(propertyWithSeller);
     } catch (error) {
+      console.error("Error fetching property:", error);
       res.status(500).json({ message: "Failed to fetch property" });
     }
   });

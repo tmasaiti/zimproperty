@@ -39,6 +39,7 @@ export interface IStorage {
   purchaseLead(data: InsertLeadPurchase): Promise<LeadPurchase>;
   getLeadPurchasesByAgent(agentId: number): Promise<(LeadPurchase & { property: Property })[]>;
   getLeadPurchase(id: number): Promise<LeadPurchase | undefined>;
+  getLeadPurchaseByAgentAndProperty(agentId: number, propertyId: number): Promise<LeadPurchase | undefined>;
   
   // Subscription operations
   createSubscription(subscription: InsertSubscription): Promise<Subscription>;
@@ -239,6 +240,20 @@ export class DatabaseStorage implements IStorage {
   async getLeadPurchase(id: number): Promise<LeadPurchase | undefined> {
     const result = await db.query.leadPurchases.findFirst({
       where: eq(leadPurchases.id, id),
+      with: {
+        property: true,
+        agent: true
+      }
+    });
+    return result;
+  }
+  
+  async getLeadPurchaseByAgentAndProperty(agentId: number, propertyId: number): Promise<LeadPurchase | undefined> {
+    const result = await db.query.leadPurchases.findFirst({
+      where: and(
+        eq(leadPurchases.agentId, agentId),
+        eq(leadPurchases.propertyId, propertyId)
+      ),
       with: {
         property: true,
         agent: true
