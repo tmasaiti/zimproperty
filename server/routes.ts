@@ -6,8 +6,17 @@ import { properties, leadPurchases, payments, notifications, subscriptions } fro
 import { eq, and, desc, gte, lt, sql, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { insertPropertySchema, insertLeadPurchaseSchema, insertPaymentSchema, insertSubscriptionSchema } from "@shared/schema";
+import Stripe from "stripe";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Initialize Stripe
+  if (!process.env.STRIPE_SECRET_KEY) {
+    throw new Error("Missing required Stripe secret key");
+  }
+  const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
+    apiVersion: "2023-10-16" as any,
+  });
+
   // Set up authentication routes
   setupAuth(app);
   
@@ -313,6 +322,134 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch subscription" });
     }
+  });
+
+  // Create Stripe subscription for payment
+  app.post("/api/create-subscription", hasRole(["agent"]), async (req, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
+
+      const { planType, price, months } = req.body;
+
+      if (!planType || !price) {
+        return res.status(400).json({ message: "Plan type and price are required" });
+      }
+
+      // Get the agent profile to include name
+      const agentProfile = await storage.getAgentProfile(req.user.id);
+      
+      // Create the payment intent with Stripe
+      const paymentIntent = await stripe.paymentIntents.create({
+        amount: Math.round(price * 100), // Convert to cents
+        currency: "usd",
+        automatic_payment_methods: {
+          enabled: true,
+        },
+        metadata: {
+          userId: req.user.id.toString(),
+          planType,
+          months: months.toString(),
+          description: `${planType} subscription (${months} month${months > 1 ? 's' : ''})`
+        },
+      });
+
+      res.json({
+        clientSecret: paymentIntent.client_secret,
+      });
+    } catch (error: any) {
+      console.error("Stripe error:", error);
+      res.status(500).json({ message: error.message || "Failed to create payment intent" });
+    }
+  });
+
+  // Stripe webhook for handling payment completions
+  app.post("/api/webhook", async (req, res) => {
+    const sig = req.headers["stripe-signature"] as string;
+
+    let event;
+
+    try {
+      // Parse the webhook payload
+      event = stripe.webhooks.constructEvent(
+        req.body,
+        sig,
+        process.env.STRIPE_WEBHOOK_SECRET || ""
+      );
+    } catch (err: any) {
+      return res.status(400).send(`Webhook Error: ${err.message}`);
+    }
+
+    // Handle the event
+    switch (event.type) {
+      case "payment_intent.succeeded":
+        const paymentIntent = event.data.object;
+        const { userId, planType, months, description } = paymentIntent.metadata;
+
+        // Create or update subscription
+        if (userId && planType && months) {
+          const user = await storage.getUser(parseInt(userId));
+          if (user && user.role === "agent") {
+            // Calculate end date
+            const endDate = new Date();
+            endDate.setMonth(endDate.getMonth() + parseInt(months));
+
+            // Check for existing subscription
+            const existingSubscription = await storage.getAgentSubscription(parseInt(userId));
+            
+            // Create or update subscription
+            if (existingSubscription) {
+              await storage.updateSubscription(existingSubscription.id, {
+                type: planType,
+                price: paymentIntent.amount / 100, // Convert from cents
+                endDate,
+                isActive: true
+              });
+            } else {
+              await storage.createSubscription({
+                agentId: parseInt(userId),
+                type: planType,
+                price: paymentIntent.amount / 100, // Convert from cents
+                startDate: new Date(),
+                endDate,
+                isActive: true,
+                autoRenew: true
+              });
+            }
+            
+            // Create payment record
+            await storage.createPayment({
+              userId: parseInt(userId),
+              amount: paymentIntent.amount / 100,
+              method: "stripe",
+              status: "completed",
+              description: description || `Subscription payment: ${planType}`,
+            });
+            
+            // Create notification
+            await storage.createNotification({
+              userId: parseInt(userId),
+              title: "Subscription Activated",
+              message: `Your ${planType.replace('_', ' ')} subscription has been activated and is valid until ${endDate.toLocaleDateString()}.`,
+              type: "subscription_activated"
+            });
+          }
+        }
+        break;
+        
+      case "payment_intent.payment_failed":
+        const failedPaymentIntent = event.data.object;
+        // You can handle failed payments here
+        break;
+        
+      default:
+        // Unexpected event type
+        console.log(`Unhandled event type ${event.type}`);
+    }
+
+    // Return a 200 response to acknowledge receipt of the event
+    res.json({ received: true });
   });
   
   //=====================================
