@@ -47,21 +47,27 @@ const SubscriptionPlans: React.FC<SubscriptionPlansProps> = ({ currentSubscripti
     },
   });
 
+  // Import useLocation for navigation
+  const [, setLocation] = useLocation();
+
   // Handle subscription
   const handleSubscribe = () => {
     if (selectedType === 'pay_per_lead') {
       toast({
         description: 'Pay-per-lead option selected. You can now purchase leads individually.',
       });
+      subscriptionMutation.mutate({
+        type: selectedType,
+        price: 0,
+        months: 0,
+      });
       return;
     }
 
     const price = calculatePrice(selectedType, selectedMonths);
-    subscriptionMutation.mutate({
-      type: selectedType,
-      price,
-      months: selectedMonths,
-    });
+    
+    // Navigate to the subscription page with plan parameters
+    setLocation(`/subscribe?plan=${selectedType}&price=${price}&months=${selectedMonths}`);
   };
 
   // Format date
